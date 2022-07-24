@@ -20,9 +20,11 @@
 #include <Jakt/LinearArray.h>
 #include <Jakt/Memory.h>
 #include <Jakt/Noncopyable.h>
+#include <Jakt/NonnullOwnPtr.h>
 #include <Jakt/NonnullRefPtr.h>
 #include <Jakt/NumericLimits.h>
 #include <Jakt/Optional.h>
+#include <Jakt/OwnPtr.h>
 #include <Jakt/Platform.h>
 #include <Jakt/PrettyPrint.h>
 #include <Jakt/RefCounted.h>

@@ -1037,6 +1037,7 @@ function get_type_signature(program: CheckedProgram, type_id: TypeId) throws -> 
             let record = program.get_struct(id)
             mut output = match record.record_type {
                 Class => "class "
+                UniqueClass => "unique class "
                 Struct => "struct "
                 ValueEnum | SumEnum => {
                     panic("unreachable: can't be an enum")

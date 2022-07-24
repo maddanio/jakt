@@ -161,13 +161,20 @@ struct SumEnumVariant {
 enum RecordType {
     Struct(fields: [ParsedField])
     Class(fields: [ParsedField], super_class: ParsedType?)
+    UniqueClass(fields: [ParsedField], super_class: ParsedType?)
     ValueEnum(underlying_type: ParsedType, variants: [ValueEnumVariant])
     SumEnum(is_boxed: bool, variants: [SumEnumVariant])
     Garbage
 
+    public function is_kind_of_class(this) => match this {
+        Class| UniqueClass => true
+        else => false
+    }
+
     public function record_type_name(this) => match this {
         Struct => "struct"
         Class => "class"
+        UniqueClass => "unique class"
         ValueEnum => "value enum"
         SumEnum => "sum enum"
         Garbage => "<garbage record type>"
@@ -647,7 +654,7 @@ struct Parser {
                     let parsed_function = .parse_function(FunctionLinkage::Internal, Visibility::Public)
                     parsed_namespace.functions.push(parsed_function)
                 }
-                Struct | Class | Enum | Boxed => {
+                Struct | Class | Enum | Boxed | Unique => {
                     let parsed_record = .parse_record(DefinitionLinkage::Internal)
                     parsed_namespace.records.push(parsed_record)
                 }
@@ -693,7 +700,7 @@ struct Parser {
                             parsed_namespace.records.push(parsed_struct)
                         }
                         Class => {
-                            let parsed_class = .parse_class(DefinitionLinkage::External)
+                            let parsed_class = .parse_class(DefinitionLinkage::External, unique: false)
                             parsed_namespace.records.push(parsed_class)
                         }
                         else => {
@@ -721,7 +728,11 @@ struct Parser {
 
     function parse_record(mut this, anon definition_linkage: DefinitionLinkage) throws -> ParsedRecord => match .current() {
         Struct => .parse_struct(definition_linkage)
-        Class => .parse_class(definition_linkage)
+        Unique => {
+            .index++
+            yield .parse_class(definition_linkage, unique: true)
+        }
+        Class => .parse_class(definition_linkage, unique: false)
         Enum => .parse_enum(definition_linkage, is_boxed: false)
         Boxed => {
             .index++
@@ -768,7 +779,7 @@ struct Parser {
                 extern_imports: []
                 import_path_if_extern: None))
 
-        
+
         match .current() {
             Identifier(name, span) => {
                 .index++
@@ -832,7 +843,7 @@ struct Parser {
 
         parsed_import.module_name = match .current() {
             Identifier(name, span) => ImportName(name, span)
-            else => { 
+            else => {
                 .error("Expected module name", .current().span())
                 return parsed_import
             }
@@ -1338,7 +1349,7 @@ struct Parser {
         return parsed_struct
     }
 
-    public function parse_class(mut this, anon definition_linkage: DefinitionLinkage) throws -> ParsedRecord {
+    public function parse_class(mut this, anon definition_linkage: DefinitionLinkage, unique: bool) throws -> ParsedRecord {
         mut parsed_class = ParsedRecord(
             name: "",
             name_span: .empty_span(),
@@ -1399,7 +1410,11 @@ struct Parser {
         let fields_methods = .parse_struct_class_body(definition_linkage, default_visibility: Visibility::Private, is_class: true)
 
         parsed_class.methods = fields_methods.1
-        parsed_class.record_type = RecordType::Class(fields: fields_methods.0, super_class)
+        if unique {
+            parsed_class.record_type = RecordType::UniqueClass(fields: fields_methods.0, super_class)
+        } else {
+            parsed_class.record_type = RecordType::Class(fields: fields_methods.0, super_class)
+        }
 
         return parsed_class
     }
@@ -1898,7 +1913,7 @@ struct Parser {
 
         if .current() is LCurly {
             .index++
-        } else { 
+        } else {
             .error("Expected '{'", start)
         }
 
@@ -2294,7 +2309,7 @@ struct Parser {
         LParen(span) => {
             let start_span = .current().span()
             .index++
-            
+
             mut expr = .parse_expression(allow_assignments: false)
 
             .skip_newlines()
@@ -2446,7 +2461,7 @@ struct Parser {
 
         return ParsedExpression::Set(values: output, span: merge_spans(start, .tokens[end].span()))
     }
-    
+
 
     function parse_operand(mut this) throws -> ParsedExpression {
         .skip_newlines()
@@ -3008,7 +3023,7 @@ struct Parser {
 
     function parse_restricted_visibility_modifier(mut this) throws -> Visibility {
         mut restricted_span = .current().span()
-        
+
         .index++
 
         if .current() is LParen {

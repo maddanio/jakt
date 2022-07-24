@@ -114,6 +114,7 @@ enum Token {
     Throws(Span)
     True(Span)
     Try(Span)
+    Unique(Span)
     Unsafe(Span)
     Weak(Span)
     While(Span)
@@ -220,6 +221,7 @@ enum Token {
         Throws(span) => span
         True(span) => span
         Try(span) => span
+        Unique(span) => span
         Unsafe(span) => span
         Weak(span) => span
         While(span) => span
@@ -267,6 +269,7 @@ enum Token {
         "throws" => Token::Throws(span)
         "true" => Token::True(span)
         "try" => Token::Try(span)
+        "unique" => Token::Unique(span)
         "unsafe" => Token::Unsafe(span)
         "weak" => Token::Weak(span)
         "while" => Token::While(span)

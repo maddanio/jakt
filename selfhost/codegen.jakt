@@ -423,7 +423,7 @@ struct CodeGenerator {
             return dependencies
         }
 
-        if struct_.record_type is Class and not top_level {
+        if struct_.record_type.is_kind_of_class() and not top_level {
             // We store and pass these as pointers, so we don't need to
             // include them in the dependency graph.
             return dependencies
@@ -439,7 +439,7 @@ struct CodeGenerator {
                 for dependency in inner_dependencies.iterator() {
                     dependencies.push(dependency)
                 }
-            }   
+            }
         }
 
         dependencies.push(struct_.type_id.to_string())
@@ -783,7 +783,7 @@ struct CodeGenerator {
             mut first = true
             for generic_parameter in struct_.generic_parameters.iterator() {
                 if first {
-                    first = false                
+                    first = false
                 } else {
                     output += ","
                 }
@@ -794,7 +794,7 @@ struct CodeGenerator {
         }
 
         output += match struct_.record_type {
-            Class => "class "
+            UniqueClass | Class => "class "
             Struct => "struct "
             else => ""
         }
@@ -822,7 +822,7 @@ struct CodeGenerator {
         }
 
         match struct_.record_type {
-            Class => {
+            Class | UniqueClass => {
                 mut class_name_with_generics = ""
                 class_name_with_generics += struct_.name
                 mut first = true
@@ -839,7 +839,11 @@ struct CodeGenerator {
                     class_name_with_generics += ">"
                 }
 
-                output += format("class {} : public RefCounted<{}>, public Weakable<{}> {{\n", struct_.name, class_name_with_generics, class_name_with_generics)
+                if struct_.record_type is Class {
+                    output += format("class {} : public RefCounted<{}>, public Weakable<{}> {{\n", struct_.name, class_name_with_generics, class_name_with_generics)
+                } else {
+                    output += format("class {} {{\n", struct_.name)
+                }
                 output += "  public:\n"
                 output += format("virtual ~{}() = default;\n", struct_.name)
             }
@@ -1113,7 +1117,7 @@ struct CodeGenerator {
 
             output += match .program.get_type(field_var.type_id) {
                 Struct(struct_id) => match .program.get_struct(struct_id).record_type {
-                    Class => "*"
+                    Class | UniqueClass => "*"
                     else => ""
                 }
                 else => ""
@@ -1276,7 +1280,7 @@ struct CodeGenerator {
                     }
                     Struct(struct_id) => {
                         let structure = .program.get_struct(struct_id)
-                        if structure.record_type is Class {
+                        if structure.record_type.is_kind_of_class() {
                             output += "->"
                         } else {
                             output += "."
@@ -1697,7 +1701,7 @@ struct CodeGenerator {
                                         as_namespace: true,
                                     ),
                                     name)
-                                
+
                                 if not args.is_empty() {
                                     for arg in args.iterator() {
                                         let var = .program.find_var_in_scope(scope_id, var: arg.binding)!
@@ -1969,7 +1973,7 @@ struct CodeGenerator {
                 }
                 Struct(id) => {
                     let struct_ = .program.get_struct(id)
-                    if struct_.record_type is Class {
+                    if struct_.record_type.is_kind_of_class() {
                         output += "->"
                     } else {
                         output += "."
@@ -2053,7 +2057,7 @@ struct CodeGenerator {
                     match type {
                         Struct(struct_id) => {
                             let struct_ = .program.get_struct(struct_id)
-                            if struct_.record_type is Class {
+                            if struct_.record_type.is_kind_of_class() {
                                 output += call.name
                                 output += "::"
                                 output += "create"
@@ -2063,7 +2067,7 @@ struct CodeGenerator {
                         }
                         GenericInstance(id, args) => {
                             let struct_ = .program.get_struct(id)
-                            if struct_.record_type is Class {
+                            if struct_.record_type.is_kind_of_class() {
                                 output += .codegen_namespace_qualifier(scope_id: struct_.scope_id)
                                 output += struct_.name
                                 output += "<"
@@ -2258,7 +2262,7 @@ struct CodeGenerator {
                         true => "return {};"
                         else => "return;"
                     }
-                }   
+                }
             }
             Loop(block) => {
                 mut output = ""
@@ -2465,13 +2469,17 @@ struct CodeGenerator {
             output += .codegen_namespace_qualifier(scope_id: struct_.scope_id)
             output += struct_.name
 
-            output += ">" 
+            output += ">"
         } else {
             let struct_ = .program.get_struct(id)
 
-            let acquired_by_ref = not as_namespace and struct_.record_type is Class
+            let acquired_by_ref = not as_namespace and struct_.record_type.is_kind_of_class()
             if acquired_by_ref {
-                output += "NonnullRefPtr<"
+                if struct_.record_type is Class {
+                    output += "NonnullRefPtr<"
+                } else {
+                    output += "NonnullOwnPtr<"
+                }
             }
             output += .codegen_namespace_qualifier(scope_id: struct_.scope_id)
             output += struct_.name
@@ -2559,8 +2567,12 @@ struct CodeGenerator {
         let type_module = .program.get_module(id.module)
         let checked_struct = .program.get_struct(id)
 
-        if not as_namespace and checked_struct.record_type is Class {
-            output += "NonnullRefPtr<"
+        if not as_namespace and checked_struct.record_type.is_kind_of_class() {
+            if checked_struct.record_type is Class {
+                output += "NonnullRefPtr<"
+            } else {
+                output += "NonnullOwnPtr<"
+            }
             if not type_module.is_root and not type_module.id.equals(ModuleId(id: 0)) {
                 output += type_module.name
                 output += "::"
@@ -2622,7 +2634,7 @@ struct CodeGenerator {
             Struct(struct_id) => {
                 let structure = .program.get_struct(struct_id)
 
-                if structure.record_type is Class {
+                if structure.record_type.is_kind_of_class() {
                     mut output = ""
 
                     output += "private:\n"
@@ -2681,7 +2693,11 @@ struct CodeGenerator {
                     }
 
                     output += "public:\n"
-                    output += format("static ErrorOr<NonnullRefPtr<{}>> create", class_name_with_generics)
+                    if structure.record_type is Class {
+                        output += format("static ErrorOr<NonnullRefPtr<{}>> create", class_name_with_generics)
+                    } else {
+                        output += format("static ErrorOr<NonnullOwnPtr<{}>> create", class_name_with_generics)
+                    }
                     output += "("
 
                     first = true
@@ -2697,7 +2713,11 @@ struct CodeGenerator {
                         output += param.variable.name
                     }
 
-                    output += format(") {{ auto o = TRY(adopt_nonnull_ref_or_enomem(new (nothrow) {} (", class_name_with_generics)
+                    if structure.record_type is Class {
+                        output += format(") {{ auto o = TRY(adopt_nonnull_ref_or_enomem(new (nothrow) {} (", class_name_with_generics)
+                    } else {
+                        output += format(") {{ auto o = TRY(adopt_nonnull_own_or_enomem(new (nothrow) {} (", class_name_with_generics)
+                    }
 
                     first = true
                     for param in function_.params.iterator() {
