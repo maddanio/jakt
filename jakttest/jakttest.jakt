@@ -594,7 +594,7 @@ struct TestScheduler {
             cpp { "if (sigaction(SIGCHLD, &action, NULL) == -1)" }
             cpp { "    return Error::from_errno(errno);" }
         }
-        mut scheduler = TestScheduler::create(directories, collect_reasons)
+        mut scheduler = TestScheduler(directories, collect_reasons)
         // pre-allocate the command buffer to avoid allocating inside a loop
         mut command_buffer: [String] = ["./jakttest/run-one.sh" "" ""]
         while not tests.is_empty() {
